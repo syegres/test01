@@ -1,13 +1,12 @@
 #include <string>
 #include <iostream>
 #include <exception>
-#include <tuple>
-#include <stack>
+#include <math.h>
 
 namespace test01
 {
 	using value_t = double;
-	const int precision = 2;
+	constexpr unsigned precision = 2;
 
 	class token
 	{
@@ -59,8 +58,10 @@ namespace test01
 				if (is_decimal_point())
 				{
 					value_t denom = 10.;
-					for( ++_begin; is_digit() && _begin != _end; ++_begin, denom *= 10)
-						val += (*_begin-'0')/denom;
+					unsigned demon_count{};
+					for( ++_begin; is_digit() && _begin != _end; ++_begin, denom *= 10, ++demon_count)
+						if (demon_count < precision)
+							val += (*_begin-'0')/denom;
 				}
 				return token(token::number, val);
 			}
@@ -134,27 +135,37 @@ namespace test01
 			return ret.value();
 		}
 
+		static value_t round(value_t val)
+		{
+			static_assert(precision<6);
+			double mult0[] = { 1., 10., 100., 1000., 10000, 100000 };
+			double mult1[] = { 1., 0.1, 0.01, 0.001, 0.0001, 0.00001 };
+			return floor(val * mult0[precision] + 0.5)*mult1[precision];
+		}
+
 		static const parser_state& expression(parser_state& input)
 		{
 			value_t val{};
+			bool stop = false;
 			if (primary_expression(input, true).success())
 				val = input.value();
-			while(input.success())
+			while(input.success() && !stop)
 			{
 				auto t = input.lexer().get_token();
 				switch(t.type())
 				{
 					case token::op_minus:
 						if (primary_expression(input, false).success())
-							val -= input.value();
+							val = round(val - input.value());
 						break;
 					case token::op_plus:
 						if (primary_expression(input, false).success())
-							val += input.value();
+							val = round(val + input.value());
 						break;
 					default:
 						input.lexer().return_token(t);
-						return input;
+						stop = true;
+						break;
 				}
 			}
 			if (input.success())
@@ -165,27 +176,30 @@ namespace test01
 		static const parser_state& primary_expression(parser_state& input, bool allow_unary_expression)
 		{
 			value_t val{};
+			bool stop = false;
 			if (operand_expression(input, allow_unary_expression).success())
 				val = input.value();
-			while(input.success())
+			while(input.success() && !stop)
 			{
 				auto t = input.lexer().get_token();
 				switch(t.type())
 				{
 					case token::op_mult:
 						if(operand_expression(input, false).success())
-							val *= input.value();
+							val = round(val * input.value());
 						break;
 					case token::op_div:
 						if (operand_expression(input, false).success())
-							val /= input.value();
+							val = round(val / input.value());
 						break;
 					default:
 						input.lexer().return_token(t);
-						return input;
+						stop = true;
+						break;
 				}
 			}
-			input.value(val);
+			if (input.success())
+				input.value(val);
 			return input;
 		}
 
@@ -201,13 +215,21 @@ namespace test01
 				{
 					case token::op_minus:
 						if (!allow_unary_expression || try_more)
+						{
 							input.lexer().return_token(t);
+							input.success(false);
+							return input;
+						}
 						else
 							mult = -1., try_more = true;
 						break;
 					case token::op_plus:
 						if (!allow_unary_expression || try_more)
+						{
 							input.lexer().return_token(t);
+							input.success(false);
+							return input;
+						}
 						else
 							mult = +1., try_more = true;
 						break;
@@ -219,6 +241,8 @@ namespace test01
 					case token::lbrace:
 						expression(input);
 						input.success(input.success() && input.lexer().get_token().type() == token::rbrace);
+						if (input.success())
+							input.value(mult*input.value());
 						return input;
 						break;
 					default:

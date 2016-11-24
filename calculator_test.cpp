@@ -25,7 +25,12 @@ TEST( calculator, op_priority )
 
 TEST( calculator, unary_expr )
 {
-	EXPECT_EQ(calculator::calculate("-+1"), 1);
+	EXPECT_THROW(calculator::calculate("-+1"), parser_exception);
+	EXPECT_EQ(calculator::calculate("- 1"), -1);
+	EXPECT_EQ(calculator::calculate("+ 1"), +1);
+	EXPECT_EQ(calculator::calculate("+1"), +1);
+	EXPECT_EQ(calculator::calculate("-(-1)"), +1);
+	EXPECT_EQ(calculator::calculate("+(+1)"), +1);
 	EXPECT_EQ(calculator::calculate("-1 + 5 - 3"), 1);
 	EXPECT_EQ(calculator::calculate("-1 + 5 + (-3)"), 1);
 	EXPECT_EQ(calculator::calculate("-1 + 5 + (-3 + 1)"), 2);
@@ -37,6 +42,7 @@ TEST( calculator, unary_expr )
 
 TEST( calculator, precision )
 {
-	EXPECT_EQ(calculator::calculate("-1.01 + 5.02 - 3.04"), 0.99);
-	EXPECT_EQ(calculator::calculate("-1.01999 + 5.02888 - 3.04777"), 0.99);
+	EXPECT_DOUBLE_EQ(calculator::calculate("-1.01 + 5.02 - 3.04"), 0.97);
+	EXPECT_DOUBLE_EQ(calculator::calculate("-1.01999 + 5.02888 - 3,04777"), 0.97);
+	EXPECT_DOUBLE_EQ(calculator::calculate("3.141592653589793/2,718281828459045"), 1.16);
 }
