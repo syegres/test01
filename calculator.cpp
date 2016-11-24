@@ -1,9 +1,9 @@
 #include <iostream>
 #include "calculator.hpp"
 
-namespace test01
-{
-}
+using namespace test01;
+using floating = calculator<double,2>;
+using integer = calculator<int64_t, 2>;
 
 int main(int argc, char* argv[])
 {
@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
 	{
 		try
 		{
-			std::cout << argv[i] << " === " << test01::calculator::calculate(argv[i]) << std::endl;
+			std::cout << argv[i] << " === " << floating::calculate(argv[i]) << std::endl;
 		}
 		catch(test01::parser_exception& ex)
 		{

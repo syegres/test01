@@ -2,18 +2,32 @@
 #include <iostream>
 #include <exception>
 #include <math.h>
+#include <stdint.h>
 
 namespace test01
 {
-	using value_t = double;
-	constexpr unsigned precision = 2;
+	namespace
+	{
+		static const double fmult0[] = { 1., 10., 100., 1000., 10000, 100000 };
+		static const double fmult1[] = { 1., 0.1, 0.01, 0.001, 0.0001, 0.00001 };
 
-	class token
+		inline double normalize(double val, unsigned precision, double) { return floor(val * fmult0[precision] + 0.5)*fmult1[precision]; }
+		inline double denormalize(double val, unsigned precision) { return val; }
+		inline double round(double val, unsigned precision) { return floor(val * fmult0[precision] + 0.5)*fmult1[precision]; }
+
+		inline int64_t normalize(double val, unsigned precision, int64_t) { return int64_t(floor(val * fmult0[precision] + 0.5)); }
+		inline double denormalize(int64_t val, unsigned precision) { return double(val) * fmult1[precision]; }
+		inline double round(int64_t val, unsigned precision) { return val; }
+	}
+
+
+	template<typename value_t>
+	class token_t
 	{
 	public:
 		enum Enum { unknown, lbrace, rbrace, op_plus, op_minus, op_mult, op_div, number, eof };
 
-		token(Enum type=unknown, value_t val=value_t{}) noexcept: _type(type), _val(val) {}
+		token_t(Enum type=unknown, value_t val=value_t{}) noexcept: _type(type), _val(val) {}
 		Enum type() const { return _type; }
 		value_t value() const { return _val; }
 
@@ -22,22 +36,20 @@ namespace test01
 		value_t _val;
 	};
 
-	class skip_ws_lexer
+	template<typename value_t>
+	class skip_ws_lexer_t
 	{
-		using cit_t = std::string::const_iterator;
-		cit_t _begin, _end;
-		token _last_token{};
-		bool is_ws() const { return *_begin == ' '; }
-		bool is_digit() const { return *_begin >= '0' && *_begin <= '9'; }
-		bool is_decimal_point() const { return *_begin == ',' || *_begin == '.'; }
-
 	public:
-		skip_ws_lexer(const std::string::const_iterator& begin, const std::string::const_iterator& end) noexcept : _begin(begin), _end(end) { }
-		skip_ws_lexer(const skip_ws_lexer& ini) noexcept : _begin(ini._begin), _end(ini._end) { }
+		using cit_t = std::string::const_iterator;
+		using token = token_t<value_t>;
+
+		skip_ws_lexer_t(const std::string::const_iterator& begin, const std::string::const_iterator& end, unsigned precision) noexcept : _begin(begin), _end(end), _precision(precision) { }
+		skip_ws_lexer_t(const skip_ws_lexer_t& ini) noexcept : _begin(ini._begin), _end(ini._end), _precision(ini._precision) { }
 
 		cit_t current() const { return _begin; }
 		bool complete() const { return _begin == _end; }
 		bool advance() { ++_begin; return !complete(); }
+		unsigned precision() const { return _precision; }
 		token get_token()
 		{
 			if (_last_token.type()!=token::unknown)
@@ -52,18 +64,18 @@ namespace test01
 				return token::eof;
 			if (is_digit() || is_decimal_point())
 			{
-				value_t val{};
+				double val{};
 				for( ; is_digit() && _begin != _end; ++_begin)
 					val = val*10. + (*_begin-'0');
 				if (is_decimal_point())
 				{
-					value_t denom = 10.;
+					double denom = 10.;
 					unsigned demon_count{};
 					for( ++_begin; is_digit() && _begin != _end; ++_begin, denom *= 10, ++demon_count)
-						if (demon_count < precision)
+						if (demon_count < _precision)
 							val += (*_begin-'0')/denom;
 				}
-				return token(token::number, val);
+				return token(token::number, normalize(val, _precision, value_t{}));
 			}
 			auto c = *_begin++;
 			switch (c)
@@ -81,19 +93,30 @@ namespace test01
 		{
 			_last_token = t;
 		}
+
+	private:
+		cit_t _begin, _end;
+		token _last_token{};
+		unsigned _precision{2};
+		bool is_ws() const { return *_begin == ' '; }
+		bool is_digit() const { return *_begin >= '0' && *_begin <= '9'; }
+		bool is_decimal_point() const { return *_begin == ',' || *_begin == '.'; }
 	};
 
-	class parser_state
+	template<typename value_t>
+	class parser_state_t
 	{
 	public:
-		parser_state(const std::string::const_iterator& begin, const std::string::const_iterator& end)
-			: _lexer(begin, end)
+		using skip_ws_lexer = skip_ws_lexer_t<value_t>;
+		parser_state_t(const std::string::const_iterator& begin, const std::string::const_iterator& end, unsigned precision)
+			: _lexer(begin, end, precision)
 		{ }
 		bool success() const { return _success; }
 		void success(bool v) { _success = v; }
 		value_t value() const { return _value; }
 		void value(value_t val) { _value = val; }
 		skip_ws_lexer& lexer() { return _lexer; }
+		unsigned precision() const { return _lexer.precision(); }
 
 	private:
 		skip_ws_lexer _lexer;
@@ -116,31 +139,27 @@ namespace test01
 		}
 	};
 
+	template<typename value_t>
 	class calculator
 	{
 	public:
-		static value_t calculate(const std::string& input)
+		using parser_state = parser_state_t<value_t>;
+		using token = typename parser_state::skip_ws_lexer::token;
+
+		static double calculate(const std::string& input)
 		{
 			return parse(input.begin(), input.end());
 		}
 
 	private:
-		static value_t parse(std::string::const_iterator begin, std::string::const_iterator end)
+		static double parse(std::string::const_iterator begin, std::string::const_iterator end, unsigned precision=2)
 		{
-			parser_state state(begin, end);
+			parser_state state(begin, end, precision);
 			auto ret = expression(state);
 			state.success(state.success() && state.lexer().complete());
 			if (!ret.success())
 				throw parser_exception("failed parsing", std::move(std::string(begin, end)), end-ret.lexer().current());
-			return ret.value();
-		}
-
-		static value_t round(value_t val)
-		{
-			static_assert(precision<6);
-			double mult0[] = { 1., 10., 100., 1000., 10000, 100000 };
-			double mult1[] = { 1., 0.1, 0.01, 0.001, 0.0001, 0.00001 };
-			return floor(val * mult0[precision] + 0.5)*mult1[precision];
+			return denormalize(ret.value(), precision);
 		}
 
 		static const parser_state& expression(parser_state& input)
@@ -156,11 +175,11 @@ namespace test01
 				{
 					case token::op_minus:
 						if (primary_expression(input, false).success())
-							val = round(val - input.value());
+							val = round(val - input.value(), input.precision());
 						break;
 					case token::op_plus:
 						if (primary_expression(input, false).success())
-							val = round(val + input.value());
+							val = round(val + input.value(), input.precision());
 						break;
 					default:
 						input.lexer().return_token(t);
@@ -182,15 +201,16 @@ namespace test01
 			while(input.success() && !stop)
 			{
 				auto t = input.lexer().get_token();
+				auto prec = input.precision();
 				switch(t.type())
 				{
 					case token::op_mult:
 						if(operand_expression(input, false).success())
-							val = round(val * input.value());
+							val = round(normalize(denormalize(val, prec) * denormalize(input.value(), prec), prec, value_t{}), prec);
 						break;
 					case token::op_div:
 						if (operand_expression(input, false).success())
-							val = round(val / input.value());
+							val = round(normalize(denormalize(val, prec) / denormalize(input.value(), prec), prec, value_t{}), prec);
 						break;
 					default:
 						input.lexer().return_token(t);
