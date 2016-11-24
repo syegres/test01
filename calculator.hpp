@@ -118,11 +118,14 @@ namespace test01
 		void value(value_t val) { _value = val; }
 		skip_ws_lexer& lexer() { return _lexer; }
 		unsigned precision() const { return _lexer.precision(); }
+		unsigned recursion() const { return _recursion; }
+		void recursion(unsigned rec) { _recursion = rec; }
 
 	private:
 		skip_ws_lexer _lexer;
 		bool _success{false};
 		value_t _value{};
+		unsigned _recursion{};
 	};
 
 	class parser_exception: std::runtime_error
@@ -185,6 +188,19 @@ namespace test01
 					case token::op_plus:
 						if (primary_expression(input, false).success())
 							val = round(val + input.value(), input.precision());
+						break;
+					case token::rbrace:
+						if (input.recursion()==0)
+						{
+							input.success(false);
+							return input;
+						}
+						else
+						{
+							input.lexer().return_token(t);
+							stop = true;
+						}
+
 						break;
 					default:
 						input.lexer().return_token(t);
@@ -264,7 +280,9 @@ namespace test01
 						return input;
 						break;
 					case token::lbrace:
+						input.recursion(input.recursion()+1);
 						expression(input);
+						input.recursion(input.recursion()-1);
 						input.success(input.success() && input.lexer().get_token().type() == token::rbrace);
 						if (input.success())
 							input.value(mult*input.value());

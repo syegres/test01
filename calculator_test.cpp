@@ -88,3 +88,11 @@ TEST( integer, precision )
 	EXPECT_DOUBLE_EQ(integer::calculate("-1.01999 + 5.02888 - 3,04777"), 0.97);
 	EXPECT_DOUBLE_EQ(integer::calculate("3.141592653589793/2,718281828459045"), 1.16);
 }
+
+TEST( floating, braces )
+{
+	EXPECT_THROW(floating::calculate("(1+1"), parser_exception);
+	EXPECT_THROW(floating::calculate("1+1)"), parser_exception);
+	EXPECT_THROW(floating::calculate("1+((1)+"), parser_exception);
+	EXPECT_THROW(floating::calculate("1*(1))+"), parser_exception);
+}
