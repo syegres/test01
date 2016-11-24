@@ -1,0 +1,1 @@
+.build/test01 "1+1" 2-2 "3--3" "23+avc" 3.145678/4.556778 --integer "1.1+2.2" --precision=4 22/33 --floating "-(+1)" 223/445 --precision=3 1/3 --integer 1/3

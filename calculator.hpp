@@ -3,6 +3,7 @@
 #include <exception>
 #include <math.h>
 #include <stdint.h>
+#include <sstream>
 
 namespace test01
 {
@@ -126,16 +127,20 @@ namespace test01
 
 	class parser_exception: std::runtime_error
 	{
-		std::string _source;
+		std::string _source, _reason;
 		long _offset;
 	public:
 		parser_exception(const std::string& reason, std::string&& source, long offset)
 			: std::runtime_error(reason), _source(source), _offset(offset)
-		{}
+		{
+			std::ostringstream oss;
+			oss << "Incorrect input at " << offset << ": " << _source.substr(offset);
+			_reason = oss.str();
+		}
 
 		const char * what() const noexcept override
 		{
-			return nullptr;
+			return _reason.c_str();
 		}
 	};
 
@@ -146,9 +151,9 @@ namespace test01
 		using parser_state = parser_state_t<value_t>;
 		using token = typename parser_state::skip_ws_lexer::token;
 
-		static double calculate(const std::string& input)
+		static double calculate(const std::string& input, unsigned precision=2)
 		{
-			return parse(input.begin(), input.end());
+			return parse(input.begin(), input.end(), precision);
 		}
 
 	private:
